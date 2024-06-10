@@ -25,9 +25,6 @@ from bl_ui.space_userpref import (
     USERPREF_MT_extensions_active_repo,
 )
 
-from . import repo_status_text
-
-
 # -----------------------------------------------------------------------------
 # Generic Utilities
 
@@ -541,11 +538,13 @@ def extensions_panel_draw_impl(
         repo_cache_store_refresh_from_prefs,
     )
 
-    from . import repo_cache_store
+    from . import repo_cache_store_ensure
+
+    repo_cache_store = repo_cache_store_ensure()
 
     # This isn't elegant, but the preferences aren't available on registration.
     if not repo_cache_store.is_init():
-        repo_cache_store_refresh_from_prefs()
+        repo_cache_store_refresh_from_prefs(repo_cache_store)
 
     layout = self.layout
 
@@ -626,15 +625,17 @@ def extensions_panel_draw_impl(
                 local_ex = None
             continue
 
-        repo = repos_all[repo_index]
-        has_remote = (repo.remote_url != "")
-        del repo
+        has_remote = (repos_all[repo_index].remote_url != "")
         if pkg_manifest_remote is None:
             if has_remote:
                 # NOTE: it would be nice to detect when the repository ran sync and it failed.
                 # This isn't such an important distinction though, the main thing users should be aware of
                 # is that a "sync" is required.
-                errors_on_draw.append("Repository: \"{:s}\" must sync with the remote repository.".format(repo.name))
+                errors_on_draw.append(
+                    "Repository: \"{:s}\" must sync with the remote repository.".format(
+                        repos_all[repo_index].name,
+                    )
+                )
             continue
 
         # Read-only.
@@ -988,17 +989,14 @@ class USERPREF_MT_extensions_settings(Menu):
         layout.operator("extensions.package_upgrade_all", text="Install Available Updates", icon='IMPORT')
         layout.operator("extensions.package_install_files", text="Install from Disk...")
 
+        layout.separator()
+        layout.operator("extensions.repo_refresh_all", text="Refresh All", icon='FILE_REFRESH')
+
         if prefs.experimental.use_extensions_debug:
             layout.separator()
 
             layout.prop(addon_prefs, "show_development_reports")
 
-            layout.separator()
-
-            # We might want to expose this for all users, the purpose of this
-            # is to refresh after changes have been made to the repos outside of Blender
-            # it's disputable if this is a common case.
-            layout.operator("preferences.addon_refresh", text="Refresh (file-system)", icon='FILE_REFRESH')
             layout.separator()
 
             layout.operator("extensions.package_install_marked", text="Install Marked", icon='IMPORT')
@@ -1012,6 +1010,10 @@ class USERPREF_MT_extensions_settings(Menu):
 
 
 def extensions_panel_draw(panel, context):
+    from . import (
+        repo_status_text,
+    )
+
     prefs = context.preferences
 
     from .bl_extension_ops import (
@@ -1122,11 +1124,13 @@ def extensions_panel_draw(panel, context):
 
 def tags_current(wm):
     from .bl_extension_ops import blender_filter_by_type_map
-    from . import repo_cache_store
+    from . import repo_cache_store_ensure
+
+    repo_cache_store = repo_cache_store_ensure()
 
     # This isn't elegant, but the preferences aren't available on registration.
     if not repo_cache_store.is_init():
-        repo_cache_store_refresh_from_prefs()
+        repo_cache_store_refresh_from_prefs(repo_cache_store)
 
     filter_by_type = blender_filter_by_type_map[wm.extension_type]
 
