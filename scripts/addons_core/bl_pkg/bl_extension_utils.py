@@ -30,6 +30,8 @@ __all__ = (
     "url_append_query_for_blender",
     "url_parse_for_blender",
     "file_mtime_or_none",
+    "scandir_with_demoted_errors",
+    "rmtree_with_fallback_or_error",
 
     # Public API.
     "json_from_filepath",
@@ -37,7 +39,7 @@ __all__ = (
     "json_to_filepath",
 
     "pkg_manifest_dict_is_valid_or_error",
-    "pkg_manifest_dict_from_file_or_error",
+    "pkg_manifest_dict_from_archive_or_error",
     "pkg_manifest_archive_url_abs_from_remote_url",
 
     "CommandBatch",
@@ -190,6 +192,22 @@ def scandir_with_demoted_errors(path: str) -> Generator[os.DirEntry[str], None, 
         yield from os.scandir(path)
     except Exception as ex:
         print("Error: scandir", ex)
+
+
+def rmtree_with_fallback_or_error(
+        path: str,
+        *,
+        remove_file: bool = True,
+        remove_link: bool = True,
+) -> Optional[str]:
+    from .cli.blender_ext import rmtree_with_fallback_or_error as fn
+    result = fn(
+        path,
+        remove_file=remove_file,
+        remove_link=remove_link,
+    )
+    assert result is None or isinstance(result, str)
+    return result
 
 
 # -----------------------------------------------------------------------------
@@ -597,6 +615,7 @@ def pkg_install(
 def pkg_uninstall(
         *,
         directory: str,
+        user_directory: str,
         pkg_id_sequence: Sequence[str],
         use_idle: bool,
 ) -> Generator[InfoItemSeq, None, None]:
@@ -607,6 +626,7 @@ def pkg_uninstall(
     yield from command_output_from_json_0([
         "uninstall", ",".join(pkg_id_sequence),
         "--local-dir", directory,
+        "--user-dir", user_directory,
     ], use_idle=use_idle)
     yield [COMPLETE_ITEM]
 
@@ -682,7 +702,7 @@ def pkg_manifest_dict_is_valid_or_error(
     return None
 
 
-def pkg_manifest_dict_from_file_or_error(
+def pkg_manifest_dict_from_archive_or_error(
         filepath: str,
 ) -> Union[Dict[str, Any], str]:
     from .cli.blender_ext import pkg_manifest_from_archive_and_validate
